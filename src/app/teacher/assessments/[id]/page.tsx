@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useWebhook } from '@/lib/hooks';
 import type { AssessmentWorkspaceData, AISuggestion, RubricListItem } from '@/lib/events';
@@ -143,18 +143,16 @@ function SetupInputPanel({
         errorMessage: 'Failed to extract text from image.'
     });
 
-    const handleTypedFileSelect = useCallback((files: File[]) => {
-        if (files.length > 0 && assessment.rubricId) {
+    const handleTypedFileSelect = useCallback((file: File) => {
+        if (assessment.rubricId) {
             // Here you would normally upload the file to a storage service and get a fileRef.
             // For the mock, we'll just use the file name as the ref.
-            uploadTypedFile({ assessmentId: assessment.id, fileRef: files[0].name });
+            uploadTypedFile({ assessmentId: assessment.id, fileRef: file.name });
         }
     }, [uploadTypedFile, assessment]);
     
-    const handleHandwrittenFileSelect = useCallback((files: File[]) => {
-        if (files.length > 0) {
-            extractText({ assessmentId: assessment.id, fileRef: files[0].name });
-        }
+    const handleHandwrittenFileSelect = useCallback((file: File) => {
+        extractText({ assessmentId: assessment.id, fileRef: file.name });
     }, [extractText, assessment.id]);
 
     const handleSaveExtractedText = useCallback(() => {
@@ -307,7 +305,7 @@ function StudentDocumentPanel({ text, suggestions, onApplySuggestion }: { text: 
         }
 
         let lastIndex = 0;
-        const parts: (string | JSX.Element)[] = [];
+        const parts: React.ReactNode[] = [];
         const sortedSuggestions = [...suggestions].sort((a, b) => a.start - b.start);
 
         sortedSuggestions.forEach((suggestion) => {
@@ -497,6 +495,7 @@ function GradingPanel({ assessment, onSaveFeedback, onSaveOverride }: { assessme
 
 export default function AssessmentWorkspacePage() {
   const params = useParams<{id: string}>();
+  const assessmentId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const [assessmentData, setAssessmentData] = useState<AssessmentWorkspaceData | null>(null);
 
   const handleAssessmentUpdate = useCallback((data: Partial<AssessmentWorkspaceData>) => {
@@ -509,9 +508,16 @@ export default function AssessmentWorkspacePage() {
 
   const { isLoading: isPageLoading, error, trigger: refetch } = useWebhook<{ assessmentId: string }, { assessment: AssessmentWorkspaceData }>({ 
     eventName: 'ASSESSMENT_GET', 
-    payload: { assessmentId: params.id },
-    onSuccess: onGetAssessmentSuccess
+    manual: true,
+    onSuccess: onGetAssessmentSuccess,
+    errorMessage: 'Failed to load assessment workspace.',
   });
+
+  useEffect(() => {
+    if (assessmentId) {
+      refetch({ assessmentId });
+    }
+  }, [assessmentId, refetch]);
 
   const {data: rubricsData, isLoading: rubricsLoading} = useWebhook<{}, { rubrics: RubricListItem[] }>({
       eventName: 'RUBRIC_LIST',
@@ -612,7 +618,7 @@ export default function AssessmentWorkspacePage() {
                 <AlertDescription>
                     There was an error fetching data for this assessment.
                     <div className="mt-4">
-                        <Button variant="destructive" onClick={() => refetch()}>Try Again</Button>
+                        <Button variant="destructive" onClick={() => assessmentId && refetch({ assessmentId })} disabled={!assessmentId}>Try Again</Button>
                     </div>
                 </AlertDescription>
             </Alert>
