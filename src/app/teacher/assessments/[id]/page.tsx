@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useWebhook } from '@/lib/hooks';
 import type { AssessmentWorkspaceData, AISuggestion, RubricListItem } from '@/lib/events';
@@ -497,6 +497,7 @@ function GradingPanel({ assessment, onSaveFeedback, onSaveOverride }: { assessme
 
 export default function AssessmentWorkspacePage() {
   const params = useParams<{id: string}>();
+  const assessmentId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const [assessmentData, setAssessmentData] = useState<AssessmentWorkspaceData | null>(null);
 
   const handleAssessmentUpdate = useCallback((data: Partial<AssessmentWorkspaceData>) => {
@@ -509,9 +510,16 @@ export default function AssessmentWorkspacePage() {
 
   const { isLoading: isPageLoading, error, trigger: refetch } = useWebhook<{ assessmentId: string }, { assessment: AssessmentWorkspaceData }>({ 
     eventName: 'ASSESSMENT_GET', 
-    payload: { assessmentId: params.id },
-    onSuccess: onGetAssessmentSuccess
+    manual: true,
+    onSuccess: onGetAssessmentSuccess,
+    errorMessage: 'Failed to load assessment workspace.',
   });
+
+  useEffect(() => {
+    if (assessmentId) {
+      refetch({ assessmentId });
+    }
+  }, [assessmentId, refetch]);
 
   const {data: rubricsData, isLoading: rubricsLoading} = useWebhook<{}, { rubrics: RubricListItem[] }>({
       eventName: 'RUBRIC_LIST',
